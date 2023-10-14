@@ -3,7 +3,6 @@ import numpy as np
 from PyQt5 import QtGui, QtWidgets
 from UI import Ui_MainWindow
 from PyQt5.QtWidgets import QFileDialog
-import matplotlib.pyplot as plt
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
@@ -17,8 +16,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pred = np.array([], int)
         self.train_accuracy = 0
         
-
-
         # 連接按鈕的點擊事件到自訂的方法
         self.ui.dataset_button.clicked.connect(self.load_dataset)
         self.ui.training_button.clicked.connect(self.train_model)
@@ -64,8 +61,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.pts_group = np.append(self.pts_group, int(d))
                 if int(d) not in self.groupID:
                     self.groupID = np.append(self.groupID, int(d))
-        self.groupID = np.sort(self.groupID)
-        
+        np.sort(self.groupID)
+
 
         # 隨機將2/3的資料分成訓練集，1/3的資料分成測試集
         idx = np.random.permutation(len(self.pts)) # 打散順序
@@ -79,34 +76,53 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # 畫圖
         self.train_pic(w)
-        # self.test_pic(w)
+        self.test_pic(w)
         self.ui.widget.canvas.draw()
+        # print("train accuracy: ", self.train_accuracy)
+        formatted_accuracy = "{:.2f}%".format(self.train_accuracy * 100)
+        self.ui.training_ac_label.setText(formatted_accuracy)
+        font = QtGui.QFont()
+        font.setFamily("Consolas")
+        font.setPointSize(14)
+        self.ui.training_ac_label.setFont(font)
+        formatted_accuracy = "{:.2f}%".format(self.test_accuracy * 100)
+        self.ui.test_ac_label.setText(formatted_accuracy)
+        font = QtGui.QFont()
+        font.setFamily("Consolas")
+        font.setPointSize(14)
+        self.ui.test_ac_label.setFont(font)
+        self.ui.weight_label.setText(str(w))
+        font = QtGui.QFont()
+        font.setFamily("Consolas")
+        font.setPointSize(10)
+        self.ui.weight_label.setFont(font)
+        # print("test accuracy: ", self.test_accuracy)
+        # print("w: ", w)
 
     def Activate_function(self,x): # 活化函數
-        if x >= 0:
+        if x < 0:
             return self.groupID[0]
         else:
             return self.groupID[1]
         
     def train_predict(self):
-        w = np.random.uniform(-1, 1, size=len(self.pts[0])) # 初始化權重 -1~1
-        theta = 0
-        w = np.concatenate(([theta], w), axis=0)
+        w = np.random.uniform(0, 1, size=len(self.pts[0])) # 初始化權重 -1~1
+        w = np.concatenate(([0], w), axis=0)
         print("w: ", w)
-        
+
+
         for i in range(self.epoch): # 要迭代幾次
-            print("epoch: ", i)
             for j in self.train_idx:
-                print(j)
                 input = self.pts[j]
                 input = np.concatenate(([-1], input), axis=0)
                 label = self.pts_group[j]
                 output = np.dot(input,w)
                 pred_result = self.Activate_function(output)
-                w = w + self.learning_rate * (label - pred_result) * input
-
+                # print(label, pred_result)
+                w = w + self.learning_rate * (label - pred_result) * np.array(input)
+               
         return w
-
+    
     def test_predict(self, w):
         for i in self.train_idx:
             input = self.pts[i]
@@ -114,6 +130,8 @@ class MainWindow(QtWidgets.QMainWindow):
             output = np.dot(input,w)
             pred_result = self.Activate_function(output)
             self.pred = np.append(self.pred, pred_result)
+        
+        # print("train pred: ", self.pred)
 
         for i in self.test_idx:
             input = self.pts[i]
@@ -122,15 +140,15 @@ class MainWindow(QtWidgets.QMainWindow):
             pred_result = self.Activate_function(output)
             self.pred = np.append(self.pred, pred_result)
 
+        # print("test pred: ", self.pred[len(self.train_idx):])
+
         return
     
     def train_pic(self, w):
         self.ui.widget.canvas.train.cla() # 清除畫布
         for i in range(len(self.train_idx)):
             j = self.train_idx[i]
-            if self.pred[i] == 1:
-                print(self.pts[j, 0], self.pts[j, 1])
-                print("---")
+            if self.pred[i] == self.groupID[0]:
                 self.ui.widget.canvas.train.scatter(self.pts[j, 0], self.pts[j, 1], s=5, color='r')
             else:
                 self.ui.widget.canvas.train.scatter(self.pts[j, 0], self.pts[j, 1], s=5, color='b')
@@ -140,11 +158,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.train_accuracy = self.train_accuracy / len(self.train_idx)
 
+      
         slope = -w[1] / w[2]
-        intercept = -w[0] / w[2]
+        intercept = w[0] / w[2]
+        print("slope: ", slope, "intercept: ", intercept)
         x = np.array([min(self.pts[:, 0]) - 1, max(self.pts[:, 0]) + 1])
         y = slope * x + intercept
-
+        print("x",x,"y",y)
         # 绘制直线
         self.ui.widget.canvas.train.plot(x, y, color='k', lw=3)
 
@@ -155,7 +175,35 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.widget.canvas.train.set_ylabel("Y")
         self.ui.widget.canvas.train.set_title("Train")
 
-        # plt.show()  # 如果需要显示图形，不要忘记这一行
+
+    def test_pic(self, w):
+        self.ui.widget.canvas.test.cla() # 清除畫布
+        for i in range(len(self.test_idx)):
+            j = self.test_idx[i]
+            if self.pred[len(self.train_idx)+i] == self.groupID[0]:
+                self.ui.widget.canvas.test.scatter(self.pts[j, 0], self.pts[j, 1], s=5, color='r')
+            else:
+                self.ui.widget.canvas.test.scatter(self.pts[j, 0], self.pts[j, 1], s=5, color='b')
+
+            if self.pred[len(self.train_idx)+i] == self.pts_group[j]:
+                self.test_accuracy += 1
+
+        self.test_accuracy = self.test_accuracy / len(self.test_idx)
+
+        slope = -w[1] / w[2]
+        intercept = w[0] / w[2]
+        x = np.array([min(self.pts[:, 0]) - 1, max(self.pts[:, 0]) + 1])
+        y = slope * x + intercept
+        
+        # 绘制直线
+        self.ui.widget.canvas.test.plot(x, y, color='k', lw=3)
+
+        # 设置坐标轴范围
+        self.ui.widget.canvas.test.axis(xmin=min(self.pts[:, 0]) - 1, xmax=max(self.pts[:, 0]) + 1)  # 設定x軸顯示範圍
+        self.ui.widget.canvas.test.axis(ymin=min(self.pts[:, 1]) - 1, ymax=max(self.pts[:, 1]) + 1)  # 設定y軸顯示範圍
+        self.ui.widget.canvas.test.set_xlabel("X")
+        self.ui.widget.canvas.test.set_ylabel("Y")
+        self.ui.widget.canvas.test.set_title("Test")
 
     def exit_application(self):
         # 在這裡處理退出應用程式的邏輯
